@@ -1,22 +1,24 @@
 import http from 'node:http'
 import type { H3Event } from 'h3'
 
-export type WgctlAction = 'up' | 'down'
+export type WgctlAction = 'up' | 'down' | 'endpoint'
 
 export interface WgctlResponse {
   ok?: boolean
   interface: string
   systemdService: string
   activeState?: string
+  endpoint?: string | null
   lastOperation: null | {
     action: string
     time: string
   }
 }
 
-export function callWgctl(event: H3Event, method: 'GET' | 'POST', path: string) {
+export function callWgctl(event: H3Event, method: 'GET' | 'POST', path: string, body?: unknown) {
   const config = useRuntimeConfig(event)
   const socketPath = process.env.WGCTL_SOCKET_PATH || String(config.wgctlSocketPath)
+  const payload = body === undefined ? undefined : JSON.stringify(body)
 
   return new Promise<WgctlResponse>((resolve, reject) => {
     const req = http.request(
@@ -24,6 +26,13 @@ export function callWgctl(event: H3Event, method: 'GET' | 'POST', path: string) 
         socketPath,
         method,
         path,
+        headers:
+          payload === undefined
+            ? undefined
+            : {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+              },
       },
       (res) => {
         let data = ''
@@ -59,6 +68,9 @@ export function callWgctl(event: H3Event, method: 'GET' | 'POST', path: string) 
       )
     })
 
+    if (payload !== undefined) {
+      req.write(payload)
+    }
     req.end()
   })
 }
