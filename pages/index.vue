@@ -14,13 +14,9 @@ type WgStatus = {
 
 type Ec2Status = {
   instanceId: string
-  region: string
   state: string
-  name: string | null
-  instanceType: string | null
-  publicIpAddress: string | null
-  privateIpAddress: string | null
-  launchTime: string | null
+  publicIpv4Address: string | null
+  publicIpv6Addresses: string[]
   lastOperation: null | {
     action: 'start' | 'stop'
     previousState: string
@@ -350,24 +346,14 @@ function syncEndpointInput() {
                 <dd class="mt-1 font-mono text-base text-zinc-950">{{ ec2Status?.instanceId || '-' }}</dd>
               </div>
               <div>
-                <dt class="text-sm text-zinc-500">Region</dt>
-                <dd class="mt-1 font-mono text-base text-zinc-950">{{ ec2Status?.region || '-' }}</dd>
+                <dt class="text-sm text-zinc-500">Public IPv4</dt>
+                <dd class="mt-1 font-mono text-base text-zinc-950">{{ ec2Status?.publicIpv4Address || '-' }}</dd>
               </div>
-              <div>
-                <dt class="text-sm text-zinc-500">Name</dt>
-                <dd class="mt-1 text-base text-zinc-950">{{ ec2Status?.name || '-' }}</dd>
-              </div>
-              <div>
-                <dt class="text-sm text-zinc-500">Type</dt>
-                <dd class="mt-1 font-mono text-base text-zinc-950">{{ ec2Status?.instanceType || '-' }}</dd>
-              </div>
-              <div>
-                <dt class="text-sm text-zinc-500">Public IP</dt>
-                <dd class="mt-1 font-mono text-base text-zinc-950">{{ ec2Status?.publicIpAddress || '-' }}</dd>
-              </div>
-              <div>
-                <dt class="text-sm text-zinc-500">Private IP</dt>
-                <dd class="mt-1 font-mono text-base text-zinc-950">{{ ec2Status?.privateIpAddress || '-' }}</dd>
+              <div class="sm:col-span-2">
+                <dt class="text-sm text-zinc-500">Public IPv6</dt>
+                <dd class="mt-1 break-all font-mono text-base text-zinc-950">
+                  {{ ec2Status?.publicIpv6Addresses?.join(', ') || '-' }}
+                </dd>
               </div>
               <div class="sm:col-span-2">
                 <dt class="text-sm text-zinc-500">Last EC2 operation</dt>
@@ -402,7 +388,7 @@ function syncEndpointInput() {
             <li>Frontend</li>
             <li>Nuxt server API</li>
             <li>wgctl daemon socket</li>
-            <li>AWS EC2 API</li>
+            <li>Lambda instance-controller</li>
           </ol>
           <div class="mt-6 space-y-2 text-sm">
             <p v-if="infoMessage" class="text-emerald-700">{{ infoMessage }}</p>
