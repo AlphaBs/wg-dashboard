@@ -12,6 +12,10 @@ browser frontend
 
 The browser never calls the wgctl daemon directly.
 
+The authenticated dashboard also looks up the browser's current public IPv4 or
+IPv6 address directly from `https://api64.ipify.org`. This lookup does not pass
+through the Nuxt server, so it reflects the user's own internet connection.
+
 ## Configuration
 
 | Variable | Default |

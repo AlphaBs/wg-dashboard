@@ -32,6 +32,21 @@ const endpointInput = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const infoMessage = ref('')
+const publicIpAddress = ref<string | null>(null)
+const publicIpCheckedAt = ref<Date | null>(null)
+const publicIpLoading = ref(false)
+const publicIpError = ref('')
+
+const publicIpVersion = computed(() => {
+  if (!publicIpAddress.value) {
+    return '-'
+  }
+  return publicIpAddress.value.includes(':') ? 'IPv6' : 'IPv4'
+})
+
+const publicIpCheckedAtText = computed(() => {
+  return publicIpCheckedAt.value?.toLocaleString() || '-'
+})
 
 const stateTone = computed(() => {
   switch (status.value?.activeState) {
@@ -84,11 +99,42 @@ const ec2LastOperationText = computed(() => {
 })
 
 onMounted(async () => {
+  void refreshPublicIp()
   password.value = sessionStorage.getItem('wg-dashboard-password') || ''
   if (password.value) {
     await verifyPassword()
   }
 })
+
+async function refreshPublicIp() {
+  publicIpLoading.value = true
+  publicIpError.value = ''
+
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  try {
+    const response = await fetch('https://api64.ipify.org?format=json', {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`IP lookup failed with status ${response.status}`)
+    }
+    const data = await response.json() as { ip?: unknown }
+    if (typeof data.ip !== 'string' || data.ip.length === 0 || data.ip.length > 45) {
+      throw new Error('IP lookup returned an invalid response')
+    }
+    publicIpAddress.value = data.ip
+    publicIpCheckedAt.value = new Date()
+  } catch (error) {
+    publicIpError.value = error instanceof DOMException && error.name === 'AbortError'
+      ? 'IP lookup timed out'
+      : error instanceof Error ? error.message : 'IP lookup failed'
+  } finally {
+    window.clearTimeout(timeout)
+    publicIpLoading.value = false
+  }
+}
 
 async function verifyPassword() {
   await withRequest(async () => {
@@ -244,6 +290,40 @@ function syncEndpointInput() {
 
       <section v-else class="grid flex-1 gap-5 py-6 lg:grid-cols-[1fr_20rem]">
         <div class="space-y-8">
+          <div class="border-b border-zinc-200 pb-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="text-sm font-semibold uppercase tracking-normal text-zinc-500">Your Public IP</h2>
+                <p class="mt-1 text-sm text-zinc-500">Detected directly from this browser</p>
+              </div>
+              <button
+                type="button"
+                class="h-9 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="publicIpLoading"
+                @click="refreshPublicIp"
+              >
+                {{ publicIpLoading ? 'Checking...' : 'Refresh IP' }}
+              </button>
+            </div>
+            <dl class="mt-5 grid gap-4 sm:grid-cols-[2fr_1fr_2fr]">
+              <div>
+                <dt class="text-sm text-zinc-500">Address</dt>
+                <dd class="mt-1 break-all font-mono text-lg font-semibold text-zinc-950">
+                  {{ publicIpAddress || '-' }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-sm text-zinc-500">Protocol</dt>
+                <dd class="mt-1 font-mono text-base text-zinc-950">{{ publicIpVersion }}</dd>
+              </div>
+              <div>
+                <dt class="text-sm text-zinc-500">Last checked</dt>
+                <dd class="mt-1 text-base text-zinc-950">{{ publicIpCheckedAtText }}</dd>
+              </div>
+            </dl>
+            <p v-if="publicIpError" class="mt-3 text-sm text-rose-700">{{ publicIpError }}</p>
+          </div>
+
           <div class="border-b border-zinc-200 pb-5">
             <h2 class="mb-4 text-sm font-semibold uppercase tracking-normal text-zinc-500">WireGuard</h2>
             <div class="flex flex-wrap items-center gap-3">
