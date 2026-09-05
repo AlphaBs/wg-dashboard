@@ -37,6 +37,8 @@ npm run hash-password -- your-password
 Create `.env`:
 
 ```sh
+HOST=127.0.0.1
+PORT=3000
 WG_DASHBOARD_PASSWORD_SHA256=<sha256-hex>
 WGCTL_SOCKET_PATH=/run/wgctl/wgctl.sock
 WGCTL_INTERFACE=wg1
@@ -67,3 +69,35 @@ npm run dev
 npm run typecheck
 npm run build
 ```
+
+## PM2 production
+
+The ecosystem file runs the built Nuxt server as one forked process and loads
+private runtime configuration from the ignored `.env` file using Node's
+`--env-file` option. Node.js 20.6 or newer is required.
+
+Install, build, and start:
+
+```sh
+npm ci
+npm run build
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+`HOST=127.0.0.1` is the recommended default when Caddy or another reverse
+proxy runs on the same server. Change it to `0.0.0.0` only when the Nuxt port
+must be reachable directly from another host.
+
+After pulling a new version:
+
+```sh
+git pull --ff-only
+npm ci
+npm run build
+pm2 reload ecosystem.config.cjs --update-env
+pm2 save
+```
+
+To configure startup after reboot, run `pm2 startup` once and execute the sudo
+command it prints, then run `pm2 save` again.
