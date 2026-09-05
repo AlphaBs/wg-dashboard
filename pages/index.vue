@@ -32,17 +32,11 @@ const endpointInput = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const infoMessage = ref('')
-const publicIpAddress = ref<string | null>(null)
+const publicIpv4Address = ref<string | null>(null)
+const publicIpv6Address = ref<string | null>(null)
 const publicIpCheckedAt = ref<Date | null>(null)
 const publicIpLoading = ref(false)
 const publicIpError = ref('')
-
-const publicIpVersion = computed(() => {
-  if (!publicIpAddress.value) {
-    return '-'
-  }
-  return publicIpAddress.value.includes(':') ? 'IPv6' : 'IPv4'
-})
 
 const publicIpCheckedAtText = computed(() => {
   return publicIpCheckedAt.value?.toLocaleString() || '-'
@@ -109,31 +103,62 @@ onMounted(async () => {
 async function refreshPublicIp() {
   publicIpLoading.value = true
   publicIpError.value = ''
+  publicIpv4Address.value = null
+  publicIpv6Address.value = null
 
+  try {
+    const [ipv4Result, ipv6Result] = await Promise.allSettled([
+      lookupPublicIp('https://api.ipify.org?format=json', 'IPv4'),
+      lookupPublicIp('https://api6.ipify.org?format=json', 'IPv6'),
+    ])
+
+    if (ipv4Result.status === 'fulfilled') {
+      publicIpv4Address.value = ipv4Result.value
+    }
+    if (ipv6Result.status === 'fulfilled') {
+      publicIpv6Address.value = ipv6Result.value
+    }
+
+    if (ipv4Result.status === 'rejected' && ipv6Result.status === 'rejected') {
+      publicIpError.value = 'IPv4 and IPv6 lookups are unavailable'
+    } else if (ipv4Result.status === 'rejected') {
+      publicIpError.value = 'IPv4 lookup is unavailable'
+    } else if (ipv6Result.status === 'rejected') {
+      publicIpError.value = 'IPv6 lookup is unavailable on this connection'
+    }
+    publicIpCheckedAt.value = new Date()
+  } finally {
+    publicIpLoading.value = false
+  }
+}
+
+async function lookupPublicIp(url: string, family: 'IPv4' | 'IPv6') {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 8000)
   try {
-    const response = await fetch('https://api64.ipify.org?format=json', {
-      cache: 'no-store',
-      signal: controller.signal,
-    })
+    const response = await fetch(url, { cache: 'no-store', signal: controller.signal })
     if (!response.ok) {
-      throw new Error(`IP lookup failed with status ${response.status}`)
+      throw new Error(`${family} lookup failed`)
     }
     const data = await response.json() as { ip?: unknown }
-    if (typeof data.ip !== 'string' || data.ip.length === 0 || data.ip.length > 45) {
-      throw new Error('IP lookup returned an invalid response')
+    if (typeof data.ip !== 'string' || !isExpectedIpFamily(data.ip, family)) {
+      throw new Error(`${family} lookup returned an invalid response`)
     }
-    publicIpAddress.value = data.ip
-    publicIpCheckedAt.value = new Date()
-  } catch (error) {
-    publicIpError.value = error instanceof DOMException && error.name === 'AbortError'
-      ? 'IP lookup timed out'
-      : error instanceof Error ? error.message : 'IP lookup failed'
+    return data.ip
   } finally {
     window.clearTimeout(timeout)
-    publicIpLoading.value = false
   }
+}
+
+function isExpectedIpFamily(address: string, family: 'IPv4' | 'IPv6') {
+  if (address.length === 0 || address.length > 45) {
+    return false
+  }
+  if (family === 'IPv6') {
+    return address.includes(':')
+  }
+  const octets = address.split('.')
+  return octets.length === 4 && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
 }
 
 async function verifyPassword() {
@@ -305,18 +330,20 @@ function syncEndpointInput() {
                 {{ publicIpLoading ? 'Checking...' : 'Refresh IP' }}
               </button>
             </div>
-            <dl class="mt-5 grid gap-4 sm:grid-cols-[2fr_1fr_2fr]">
+            <dl class="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
-                <dt class="text-sm text-zinc-500">Address</dt>
+                <dt class="text-sm text-zinc-500">IPv4 address</dt>
                 <dd class="mt-1 break-all font-mono text-lg font-semibold text-zinc-950">
-                  {{ publicIpAddress || '-' }}
+                  {{ publicIpv4Address || 'Unavailable' }}
                 </dd>
               </div>
               <div>
-                <dt class="text-sm text-zinc-500">Protocol</dt>
-                <dd class="mt-1 font-mono text-base text-zinc-950">{{ publicIpVersion }}</dd>
+                <dt class="text-sm text-zinc-500">IPv6 address</dt>
+                <dd class="mt-1 break-all font-mono text-lg font-semibold text-zinc-950">
+                  {{ publicIpv6Address || 'Unavailable' }}
+                </dd>
               </div>
-              <div>
+              <div class="sm:col-span-2">
                 <dt class="text-sm text-zinc-500">Last checked</dt>
                 <dd class="mt-1 text-base text-zinc-950">{{ publicIpCheckedAtText }}</dd>
               </div>
